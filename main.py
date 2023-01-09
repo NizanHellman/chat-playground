@@ -1,4 +1,7 @@
+import asyncio
 from typing import List
+
+import aio_pika
 from fastapi import FastAPI
 from fastapi import WebSocket
 from fastapi import WebSocketDisconnect
@@ -38,6 +41,20 @@ class SocketManager:
             await connection[0].send_json(data)
 
 
+async def get_exchange(future):
+    connection = await aio_pika.connect_robust("amqp://user:password@localhost:5672/", loop=loop)
+    channel = await connection.channel()
+
+    # Declare the exchange
+    exchange_name = 'my_exchange'
+    routing_key = ''
+    exchange_obj = await channel.declare_exchange(name=exchange_name, type='fanout')
+    future.set_result(exchange_obj)
+
+loop = asyncio.get_event_loop()
+future_exchange = loop.create_future()
+loop.create_task(get_exchange(future_exchange))
+
 manager = SocketManager()
 
 
@@ -64,11 +81,15 @@ async def chat(websocket: WebSocket):
         try:
             while True:
                 data = await websocket.receive_json()
-                await manager.broadcast(data)
+                # await manager.broadcast(data)  # send to exchange
+                exchange = await future_exchange
+                await exchange.publish(aio_pika.Message(body=data['message'].encode()), routing_key='')
         except WebSocketDisconnect:
             manager.disconnect(websocket, sender)
             response['message'] = "left"
             await manager.broadcast(response)
+        except Exception as e:
+            print(e)
 
 
 @app.get("/api/current_user")

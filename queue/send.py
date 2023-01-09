@@ -2,17 +2,21 @@ import pika
 
 credentials = pika.PlainCredentials(username='user',
                                     password='password')
-connection = pika.BlockingConnection(pika.ConnectionParameters(host='192.168.250.22',
+print(pika.ConnectionParameters(host='localhost', port=5672, credentials=credentials))
+connection = pika.BlockingConnection(pika.ConnectionParameters(host='localhost',
                                                                port=5672,
                                                                credentials=credentials))
 channel = connection.channel()
 
-channel.queue_declare(queue='hello', auto_delete=True)
+# Declare the exchange
+exchange_name = 'my_exchange'
+channel.exchange_declare(exchange=exchange_name, exchange_type='fanout')
 
-channel.basic_publish(exchange='',
-                      routing_key='hello',
-                      body='Hello World!')
-print(" [X] Sent 'hello World!'")
+# Send a message to the exchange
+message = 'Hello, World!'
+channel.basic_publish(exchange=exchange_name, routing_key='', body=message.encode())
+
+print("Sent message '%s'" % message)
 
 connection.close()
 
