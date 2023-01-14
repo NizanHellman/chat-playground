@@ -1,4 +1,5 @@
 import asyncio
+import json
 from typing import List
 
 import aio_pika
@@ -41,19 +42,58 @@ class SocketManager:
             await connection[0].send_json(data)
 
 
-async def get_exchange(future):
+async def get_exchange(future_connection, future_exchange):
     connection = await aio_pika.connect_robust("amqp://user:password@localhost:5672/", loop=loop)
+    future_connection.set_result(connection)
     channel = await connection.channel()
 
     # Declare the exchange
     exchange_name = 'my_exchange'
     routing_key = ''
     exchange_obj = await channel.declare_exchange(name=exchange_name, type='fanout')
-    future.set_result(exchange_obj)
+    future_exchange.set_result(exchange_obj)
+
+
+async def consumer(future_connection, future_exchange):
+    connection = await future_connection
+
+    # queue_name = "test_queue"
+    routing_key = ""
+
+    # Creating channel
+    channel = await connection.channel()
+
+    # Declaring exchange
+    exchange = await future_exchange
+
+    # Declaring queue
+    queue = await channel.declare_queue(auto_delete=True)
+    print(f"queue name: {queue.name}")
+
+    # Binding queue
+    await queue.bind(exchange, routing_key)
+
+    async def process_message(message: aio_pika.abc.AbstractIncomingMessage) -> None:
+        async with message.process():
+            print(message.body)
+            await manager.broadcast(json.loads(message.body))  # send to exchange
+            await asyncio.sleep(1)
+
+    # Receiving message
+    await queue.consume(callback=process_message)
+
+    try:
+        # Wait until terminate
+        await asyncio.Future()
+    finally:
+        await connection.close()
+
 
 loop = asyncio.get_event_loop()
+future_connection = loop.create_future()
 future_exchange = loop.create_future()
-loop.create_task(get_exchange(future_exchange))
+loop.create_task(get_exchange(future_connection, future_exchange))
+loop.create_task(consumer(future_connection, future_exchange))
 
 manager = SocketManager()
 
@@ -79,11 +119,11 @@ async def chat(websocket: WebSocket):
         }
         await manager.broadcast(response)
         try:
+            exchange = await future_exchange
             while True:
                 data = await websocket.receive_json()
                 # await manager.broadcast(data)  # send to exchange
-                exchange = await future_exchange
-                await exchange.publish(aio_pika.Message(body=data['message'].encode()), routing_key='')
+                await exchange.publish(aio_pika.Message(body=json.dumps(data).encode()), routing_key='')
         except WebSocketDisconnect:
             manager.disconnect(websocket, sender)
             response['message'] = "left"
@@ -100,5 +140,3 @@ def get_user(request: Request):
 @app.post("/api/register")
 def register_user(user: RegisterValidator, response: Response):
     response.set_cookie(key="X-Authorization", value=user.username, httponly=True)
-
-

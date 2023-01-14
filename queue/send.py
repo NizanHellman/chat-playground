@@ -13,8 +13,9 @@ exchange_name = 'my_exchange'
 channel.exchange_declare(exchange=exchange_name, exchange_type='fanout')
 
 # Send a message to the exchange
-message = 'Hello, World!'
-channel.basic_publish(exchange=exchange_name, routing_key='', body=message.encode())
+for i in range(15000):
+    message = f'Hello, World! {i}'
+    channel.basic_publish(exchange=exchange_name, routing_key='', body=message.encode())
 
 print("Sent message '%s'" % message)
 

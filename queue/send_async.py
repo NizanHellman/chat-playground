@@ -16,7 +16,13 @@ async def main(loop):
         exchange_name = 'my_exchange'
         routing_key = ''
         exchange = await channel.declare_exchange(name=exchange_name, type='fanout')
-        await exchange.publish(aio_pika.Message(body='Nivan'.format(routing_key).encode()), routing_key=routing_key)
+        published = []
+        for i in range(15000):
+            msg = f'Nivan {i}'
+            published.append(exchange.publish(aio_pika.Message(body=msg.format(routing_key).encode()), routing_key=routing_key))
+            # await exchange.publish(aio_pika.Message(body=msg.format(routing_key).encode()), routing_key=routing_key)
+
+        results = await asyncio.gather(*published, )
 
 
 if __name__ == "__main__":
