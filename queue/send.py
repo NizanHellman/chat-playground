@@ -1,3 +1,5 @@
+import json
+
 import pika
 
 credentials = pika.PlainCredentials(username='user',
@@ -13,9 +15,10 @@ exchange_name = 'my_exchange'
 channel.exchange_declare(exchange=exchange_name, exchange_type='fanout')
 
 # Send a message to the exchange
-for i in range(15000):
+for i in range(1):
     message = f'Hello, World! {i}'
-    channel.basic_publish(exchange=exchange_name, routing_key='', body=message.encode())
+    data = {"sender": "Python", "message": message}
+    channel.basic_publish(exchange=exchange_name, routing_key='', body=json.dumps(data).encode())
 
 print("Sent message '%s'" % message)
 

@@ -10,13 +10,25 @@ from fastapi import Request
 from fastapi import Response
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
-
+from starlette.middleware.cors import CORSMiddleware
 
 # locate templates
 templates = Jinja2Templates(directory="templates")
 
 
 app = FastAPI()
+
+origins = [
+    "http://localhost:5173"
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 class RegisterValidator(BaseModel):
@@ -89,7 +101,7 @@ async def consumer(future_connection, future_exchange):
         await connection.close()
 
 
-loop = asyncio.get_event_loop()
+loop = asyncio.get_running_loop()
 future_connection = loop.create_future()
 future_exchange = loop.create_future()
 loop.create_task(get_exchange(future_connection, future_exchange))
@@ -110,7 +122,8 @@ def get_chat(request: Request):
 
 @app.websocket("/api/chat")
 async def chat(websocket: WebSocket):
-    sender = websocket.cookies.get("X-Authorization")
+    sender = websocket.query_params.get('user')
+    # sender = websocket.cookies.get("X-Authorization")
     if sender:
         await manager.connect(websocket, sender)
         response = {
